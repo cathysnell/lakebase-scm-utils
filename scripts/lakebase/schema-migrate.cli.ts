@@ -178,6 +178,8 @@ async function main(): Promise<number> {
           branch: args.branch,
           projectDir: args.projectDir,
           language: args.language,
+          database: args.database,
+          endpointName: args.endpointName,
         });
         printJson(result, args.pretty ?? false);
         if (!result.ok) {
