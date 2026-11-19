@@ -346,7 +346,10 @@ describe("applyAndVerifyTierMigration (Finding 25)", () => {
       new URL("../../scripts/lakebase/schema-migrate.cli.ts", import.meta.url),
       "utf8",
     );
-    const block = src.slice(src.indexOf('case "apply-tier"'), src.indexOf('case "rollback"'));
+    // Scope to the apply-tier case body: from its label up to the next `case "`
+    // label, so the check doesn't depend on switch-case order.
+    const block = /case "apply-tier":[\s\S]*?(?=\n\s*case ")/.exec(src)?.[0] ?? "";
+    expect(block).not.toBe("");
     expect(block).toMatch(/applyAndVerifyTierMigration\(\{[\s\S]*database: args\.database/);
     expect(block).toMatch(/applyAndVerifyTierMigration\(\{[\s\S]*endpointName: args\.endpointName/);
   });

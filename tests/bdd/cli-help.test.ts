@@ -12,7 +12,7 @@ function runCli(script: string, args: string[]) {
   return spawnSync(
     process.execPath,
     ["--import", "tsx", `scripts/lakebase/${script}`, ...args],
-    { cwd: REPO_ROOT, encoding: "utf8", timeout: 60_000 },
+    { cwd: REPO_ROOT, encoding: "utf8", timeout: 20_000 /* under vitest's 30 s testTimeout: spawnSync blocks the loop */ },
   );
 }
 

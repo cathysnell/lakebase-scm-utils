@@ -38,13 +38,14 @@ interface ParsedArgs {
 function parseArgs(argv: string[]): ParsedArgs {
   const out: ParsedArgs = {};
   if (argv.length === 0) return out;
-  // A leading --help / -h is a request for usage, not a subcommand named "--help".
-  if (argv[0] === "--help" || argv[0] === "-h") {
-    out.help = true;
-    return out;
+  // A leading flag (e.g. --help, -h) is not a subcommand; let the flag loop
+  // handle it (same rule as branch.cli.ts).
+  let i = 0;
+  if (!argv[0].startsWith("-")) {
+    out.subcommand = argv[0];
+    i = 1;
   }
-  out.subcommand = argv[0];
-  for (let i = 1; i < argv.length; i++) {
+  for (; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
       case "--instance":
@@ -95,7 +96,7 @@ Subcommands:
   status      Show current applied version and pending migrations
   list      Enumerate migration files on disk (no DB connection)
 
-Common flags (for apply, rollback, status):
+Common flags (for apply, apply-tier, rollback, status):
   --instance <id>            Lakebase project id (required)
   --branch <name>            Branch to migrate against (required)
   --project-dir <dir>        Project root (default: cwd)
@@ -114,6 +115,7 @@ Examples:
   ${binName} list
   ${binName} status --instance proj-x --branch feature/foo
   ${binName} apply --instance proj-x --branch feature/foo
+  ${binName} apply-tier --instance proj-x --branch staging --database app_db
   ${binName} rollback --instance proj-x --branch feature/foo --target -1
 
 Language support today:
