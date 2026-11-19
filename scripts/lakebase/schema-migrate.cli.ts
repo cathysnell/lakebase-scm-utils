@@ -38,6 +38,11 @@ interface ParsedArgs {
 function parseArgs(argv: string[]): ParsedArgs {
   const out: ParsedArgs = {};
   if (argv.length === 0) return out;
+  // A leading --help / -h is a request for usage, not a subcommand named "--help".
+  if (argv[0] === "--help" || argv[0] === "-h") {
+    out.help = true;
+    return out;
+  }
   out.subcommand = argv[0];
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
