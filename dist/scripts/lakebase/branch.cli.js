@@ -24,7 +24,7 @@ var KIT_TIMEOUTS = {
   pgConnect: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_CONNECT_MS", 1e4),
   pgStatement: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_STATEMENT_MS", 15e3),
   gitDefault: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_DEFAULT_MS", 5e3),
-  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 1e4),
+  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 12e4),
   gitNetwork: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_NETWORK_MS", 15e3),
   gitPush: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_PUSH_MS", 3e4),
   cliLong: intFromEnv("LAKEBASE_KIT_TIMEOUT_CLI_LONG_MS", 6e4),
@@ -1012,6 +1012,15 @@ function gitCurrentBranch(cwd) {
     timeout: KIT_TIMEOUTS.gitDefault
   }).trim();
 }
+function checkoutLandedDespiteTimeout(err, cwd, branch) {
+  const code = err?.code;
+  if (code !== "ETIMEDOUT") return false;
+  try {
+    return gitCurrentBranch(cwd) === branch;
+  } catch {
+    return false;
+  }
+}
 function gitHasLocalBranch(cwd, branch) {
   try {
     execFileSync3("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], {
@@ -1169,17 +1178,25 @@ async function createPairedBranch(args) {
   }
   let gitBranchCreated = false;
   if (createGitBranch) {
+    const hadLocalBranch = gitHasLocalBranch(args.cwd, sanitized);
     try {
-      if (gitHasLocalBranch(args.cwd, sanitized)) {
+      if (hadLocalBranch) {
         gitCheckoutExistingBranch(args.cwd, sanitized);
       } else {
         gitCheckoutNewBranch(args.cwd, sanitized, gitStartPoint);
         gitBranchCreated = true;
       }
     } catch (err) {
-      warnings.push(
-        `Failed to create/switch git branch "${sanitized}": ${err instanceof Error ? err.message : String(err)}`
-      );
+      if (checkoutLandedDespiteTimeout(err, args.cwd, sanitized)) {
+        gitBranchCreated = !hadLocalBranch;
+        warnings.push(
+          `git checkout of "${sanitized}" exceeded ${KIT_TIMEOUTS.gitCheckout} ms, most likely in a post-checkout hook, which was stopped. The branch is checked out` + (syncEnv ? " and .env is re-synced below." : "; run `lakebase-branch sync-env` to refresh .env.") + ` Raise LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS if your hooks need longer.`
+        );
+      } else {
+        warnings.push(
+          `Failed to create/switch git branch "${sanitized}": ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   }
   let envSynced = false;
@@ -1481,6 +1498,23 @@ async function createPerfPairedBranch(args) {
   });
 }
 
+// scripts/util/redact-dsn.ts
+var REDACTED = "***";
+var DSN_PASSWORD = /(postgres(?:ql)?:\/\/[^:@/\s]*:)[^@/\s]+@/gi;
+function redactDsnPasswords(text) {
+  return text.replace(DSN_PASSWORD, `$1${REDACTED}@`);
+}
+function redactDsnSecrets(value) {
+  if (typeof value === "string") return redactDsnPasswords(value);
+  if (Array.isArray(value)) return value.map((v) => redactDsnSecrets(v));
+  if (value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = redactDsnSecrets(v);
+    return out;
+  }
+  return value;
+}
+
 // scripts/lakebase/branch.cli.ts
 function parseArgs(argv) {
   const out = {};
@@ -1556,6 +1590,9 @@ function parseArgs(argv) {
       case "--pretty":
         out.pretty = true;
         break;
+      case "--show-secrets":
+        out.showSecrets = true;
+        break;
       case "--help":
       case "-h":
         out.help = true;
@@ -1593,6 +1630,8 @@ Common flags:
   --branch <name>          Branch name (required for most subcommands)
   --host <host>            DATABRICKS_HOST override
   --pretty                 Pretty-print JSON output
+  --show-secrets           Print connection strings with their password (a live
+                           OAuth token). Masked as *** by default.
 
 create / create-paired / create-paired-tier:
   --parent <name>          Parent branch override
@@ -1626,9 +1665,11 @@ Refuses the project's default Lakebase branch under delete (the trunk every
 other branch was forked from). Pass --allow-default to override only when
 tearing down the entire project.
 `;
+var showSecrets = false;
 function printJson(result, pretty) {
+  const shown = showSecrets ? result : redactDsnSecrets(result);
   process.stdout.write(
-    (pretty ? JSON.stringify(result, null, 2) : JSON.stringify(result)) + "\n"
+    (pretty ? JSON.stringify(shown, null, 2) : JSON.stringify(shown)) + "\n"
   );
 }
 function requireFlags(sub, args, required) {
@@ -1647,6 +1688,7 @@ async function main() {
     return args.help ? 0 : 2;
   }
   const pretty = args.pretty ?? false;
+  showSecrets = args.showSecrets ?? false;
   try {
     switch (args.subcommand) {
       case "list": {

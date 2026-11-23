@@ -8104,7 +8104,7 @@ var KIT_TIMEOUTS = {
   pgConnect: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_CONNECT_MS", 1e4),
   pgStatement: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_STATEMENT_MS", 15e3),
   gitDefault: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_DEFAULT_MS", 5e3),
-  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 1e4),
+  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 12e4),
   gitNetwork: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_NETWORK_MS", 15e3),
   gitPush: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_PUSH_MS", 3e4),
   cliLong: intFromEnv("LAKEBASE_KIT_TIMEOUT_CLI_LONG_MS", 6e4),
@@ -9978,8 +9978,8 @@ var PKG_NAME = "@databricks-solutions/lakebase-scm-utils";
 var cached;
 function substrateSelfVersion() {
   if (cached !== void 0) return cached;
-  if ("0.3.18".length > 0) {
-    cached = "0.3.18";
+  if ("0.3.19".length > 0) {
+    cached = "0.3.19";
     return cached;
   }
   cached = "unknown";
@@ -11565,6 +11565,9 @@ function migrationSlug2(description) {
 }
 
 // scripts/lakebase/scm-merge.cli.ts
+function resolvePromoteDatabase(flag, projectDir) {
+  return flag || process.env.PGDATABASE || readEnvVar(path17.join(projectDir, ".env"), "PGDATABASE") || void 0;
+}
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
@@ -11603,6 +11606,9 @@ function parseArgs(argv) {
         break;
       case "--no-local-migrate-fallback":
         out.noLocalMigrateFallback = true;
+        break;
+      case "--database":
+        out.database = argv[++i];
         break;
       case "--json":
         out.json = true;
@@ -11660,6 +11666,9 @@ Flags:
                           applies the parent migrations LOCALLY with a fresh token
                           if the downstream migrate does not confirm, so git and
                           Lakebase schema do not diverge (FEIP-8020).
+  --database <name>       Database the local-migrate fallback migrates and
+                          verifies. Default: $PGDATABASE, then PGDATABASE in the
+                          project's .env, then "databricks_postgres".
   --json                  Machine-readable JSON output
   --pretty                Pretty-print JSON
   -h, --help              Show this help
@@ -11749,7 +11758,12 @@ async function runScmMergeCli(argv) {
     if (!inst || !parent) {
       return { ok: false, detail: "workflow state is missing project_id / parent_branch" };
     }
-    return applyAndVerifyTierMigration({ instance: inst, branch: parent, projectDir });
+    return applyAndVerifyTierMigration({
+      instance: inst,
+      branch: parent,
+      projectDir,
+      database: resolvePromoteDatabase(args.database, projectDir)
+    });
   } : void 0;
   try {
     const result = await mergeFeature({
@@ -11797,6 +11811,7 @@ if (isCliEntry(import.meta.url)) {
   void runScmMergeCli(process.argv.slice(2)).then((c) => process.exit(c));
 }
 export {
+  resolvePromoteDatabase,
   runScmMergeCli
 };
 /*! Bundled license information:

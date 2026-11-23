@@ -27,7 +27,7 @@ var KIT_TIMEOUTS = {
   pgConnect: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_CONNECT_MS", 1e4),
   pgStatement: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_STATEMENT_MS", 15e3),
   gitDefault: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_DEFAULT_MS", 5e3),
-  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 1e4),
+  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 12e4),
   gitNetwork: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_NETWORK_MS", 15e3),
   gitPush: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_PUSH_MS", 3e4),
   cliLong: intFromEnv("LAKEBASE_KIT_TIMEOUT_CLI_LONG_MS", 6e4),
@@ -754,8 +754,8 @@ var PKG_NAME = "@databricks-solutions/lakebase-scm-utils";
 var cached;
 function substrateSelfVersion() {
   if (cached !== void 0) return cached;
-  if ("0.3.18".length > 0) {
-    cached = "0.3.18";
+  if ("0.3.19".length > 0) {
+    cached = "0.3.19";
     return cached;
   }
   cached = "unknown";
@@ -2568,7 +2568,7 @@ async function resolveCiBranch(args) {
       "resolveCiBranch: either gitBranch or lakebaseName is required"
     );
   }
-  const database = args.database ?? DEFAULT_DATABASE2;
+  const database = args.database || process.env.PGDATABASE || DEFAULT_DATABASE2;
   const branches = await listBranches({ instance: args.instance });
   const lakebaseName = args.lakebaseName ? args.lakebaseName : await gitToLakebaseName(args.gitBranch, branches, args.instance);
   if (!lakebaseName) {
@@ -2776,7 +2776,7 @@ Flags:
   --github-env                 Append vars to $GITHUB_ENV (heredoc for secrets)
                                AND emit NON-SECRET KEY='value' to stdout for the
                                caller to \`eval\` within the same step.
-  --database <name>            Database name (default: databricks_postgres).
+  --database <name>            Database name (default: $PGDATABASE, else databricks_postgres).
 
 Requires:
   LAKEBASE_PROJECT_ID env (project id; the CLI inherits this).

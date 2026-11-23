@@ -79002,6 +79002,7 @@ __export(scripts_exports, {
   checkGitHubWorkflowScope: () => checkGitHubWorkflowScope,
   checkoutBranch: () => checkoutBranch,
   checkoutDetached: () => checkoutDetached,
+  checkoutLandedDespiteTimeout: () => checkoutLandedDespiteTimeout,
   checkoutPaired: () => checkoutPaired,
   cherryPick: () => cherryPick,
   ciTokenComment: () => ciTokenComment,
@@ -86224,7 +86225,7 @@ var KIT_TIMEOUTS = {
   pgConnect: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_CONNECT_MS", 1e4),
   pgStatement: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_STATEMENT_MS", 15e3),
   gitDefault: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_DEFAULT_MS", 5e3),
-  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 1e4),
+  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 12e4),
   gitNetwork: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_NETWORK_MS", 15e3),
   gitPush: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_PUSH_MS", 3e4),
   cliLong: intFromEnv("LAKEBASE_KIT_TIMEOUT_CLI_LONG_MS", 6e4),
@@ -88999,8 +89000,8 @@ var PKG_NAME = "@databricks-solutions/lakebase-scm-utils";
 var cached;
 function substrateSelfVersion() {
   if (cached !== void 0) return cached;
-  if ("0.3.18".length > 0) {
-    cached = "0.3.18";
+  if ("0.3.19".length > 0) {
+    cached = "0.3.19";
     return cached;
   }
   cached = "unknown";
@@ -89288,6 +89289,15 @@ function gitCurrentBranch(cwd) {
     timeout: KIT_TIMEOUTS.gitDefault
   }).trim();
 }
+function checkoutLandedDespiteTimeout(err, cwd, branch) {
+  const code = err?.code;
+  if (code !== "ETIMEDOUT") return false;
+  try {
+    return gitCurrentBranch(cwd) === branch;
+  } catch {
+    return false;
+  }
+}
 function gitHasLocalBranch(cwd, branch) {
   try {
     (0, import_node_child_process4.execFileSync)("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], {
@@ -89452,17 +89462,25 @@ async function createPairedBranch(args) {
   }
   let gitBranchCreated = false;
   if (createGitBranch) {
+    const hadLocalBranch = gitHasLocalBranch(args.cwd, sanitized);
     try {
-      if (gitHasLocalBranch(args.cwd, sanitized)) {
+      if (hadLocalBranch) {
         gitCheckoutExistingBranch(args.cwd, sanitized);
       } else {
         gitCheckoutNewBranch(args.cwd, sanitized, gitStartPoint);
         gitBranchCreated = true;
       }
     } catch (err) {
-      warnings.push(
-        `Failed to create/switch git branch "${sanitized}": ${err instanceof Error ? err.message : String(err)}`
-      );
+      if (checkoutLandedDespiteTimeout(err, args.cwd, sanitized)) {
+        gitBranchCreated = !hadLocalBranch;
+        warnings.push(
+          `git checkout of "${sanitized}" exceeded ${KIT_TIMEOUTS.gitCheckout} ms, most likely in a post-checkout hook, which was stopped. The branch is checked out` + (syncEnv ? " and .env is re-synced below." : "; run `lakebase-branch sync-env` to refresh .env.") + ` Raise LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS if your hooks need longer.`
+        );
+      } else {
+        warnings.push(
+          `Failed to create/switch git branch "${sanitized}": ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   }
   let envSynced = false;
@@ -98878,6 +98896,7 @@ function isCliEntry(importMetaUrl2) {
   checkGitHubWorkflowScope,
   checkoutBranch,
   checkoutDetached,
+  checkoutLandedDespiteTimeout,
   checkoutPaired,
   cherryPick,
   ciTokenComment,

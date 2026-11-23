@@ -2,6 +2,13 @@
 
 All notable changes to `@databricks-solutions/lakebase-scm-utils` are documented here.
 
+## 0.3.19 - 2026-11-23
+
+- **deps: drop the unused `@databricks/appkit` dependency; `tar` ^7.5.23, `adm-zip` ^0.6.1.** No source, template, script, or test imports `@databricks/appkit`. It is only named in skill docs, as something a consumer app adds itself. It still pulled ~40 advisories (OpenTelemetry, express, grpc-js, protobufjs, ...) into every consumer's audit and ran its postinstall on each runtime-kit warm. `tar` and `adm-zip` move to their first patched releases (tar crash on PAX numeric path; adm-zip crafted-ZIP 4 GB allocation). Production `npm audit`: 47 → 0. `dist/` is byte-identical (tar and adm-zip are external in both builds).
+- **`lakebase-branch` masks DSN passwords in its JSON output.** `sync-env`, `checkout-paired` and `create-paired` printed `databaseUrl` with its live OAuth token; the password now prints as `***`. Pass `--show-secrets` for the old output. Library return values are unchanged.
+- **Paired-branch checkout allows 120 s by default (was 10 s)**, because the documented post-checkout hook syncs `.env` against Lakebase inside the checkout. A checkout that switched branches but timed out in a hook is now reported as such (the branch is checked out, `.env` re-synced) instead of "Failed to create/switch git branch". `LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS` still overrides.
+- **Promote and CI honour the project's database.** `scm-merge --database` (else `$PGDATABASE`, then `PGDATABASE` in `.env`) for the local-migrate fallback; `ci-resolve-branch` now honours `$PGDATABASE` like the other CLIs; scaffolded `pr.yml` / `merge.yml` take the database from the optional `LAKEBASE_DATABASE` repo variable (default `databricks_postgres`, unchanged).
+
 ## 0.3.18 - 2026-11-23
 
 - **`lakebase-schema-migrate apply-tier` honors `--database` and `--endpoint`.** Before, `apply-tier` parsed both flags but dropped them: it migrated *and verified* `$PGDATABASE` (else `databricks_postgres`) on the `primary` endpoint, and still reported `ok: true`. If you ran `apply-tier --database <db>` with `PGDATABASE` unset, check that `<db>` on that tier is at head. `applyAndVerifyTierMigration` accepts optional `database` / `endpointName`. Not yet changed: the scaffolded `merge.yml` migrate-target step and the `scm-merge` local-migrate fallback pass no database, so they still use the default DB.
@@ -12,8 +19,6 @@ All notable changes to `@databricks-solutions/lakebase-scm-utils` are documented
 - **README:** the subpath-import reference now points at `@databricks-solutions/lakebase-scm-utils/{lakebase,github,git,util}` (not the stale `@databricks-solutions/consort/...`).
 
 ## 0.3.17
-
-- **deps: drop the unused `@databricks/appkit` dependency; `tar` ^7.5.23, `adm-zip` ^0.6.1.** No source, template, script, or test imports `@databricks/appkit`. It is only named in skill docs, as something a consumer app adds itself. It still pulled ~40 advisories (OpenTelemetry, express, grpc-js, protobufjs, ...) into every consumer's audit and ran its postinstall on each runtime-kit warm. `tar` and `adm-zip` move to their first patched releases (tar crash on PAX numeric path; adm-zip crafted-ZIP 4 GB allocation). Production `npm audit`: 47 → 0. `dist/` is byte-identical (tar and adm-zip are external in both builds).
 
 - **.NET (ASP.NET Core) is a supported language, with EF Core or Flyway migrations.** A `*.sln` / `*.slnx` / `*.csproj` marks a project as `dotnet` (checked after Java and Python, before `package.json`). The migration tool is chosen from markers: Flyway when SQL migrations live in `db/migrations/`, EF Core when a project references `Microsoft.EntityFrameworkCore.Design`.
   - New `EfCoreAdapter` (`efcore`): apply, status, list, rollback (EF `Down()`; relative `-N`, `0`, id, version, or name), stamp (writes `__EFMigrationsHistory` rows), and new-migration (`dotnet ef migrations add`, generated from the model diff). It drives `dotnet ef --json --prefix-output` and passes the branch DSN in `DATABASE_URL`, never on the command line. `LAKEBASE_EFCORE_CONNECTION_ARG=1` opts into `--connection` for projects whose design-time factory cannot read the environment.
