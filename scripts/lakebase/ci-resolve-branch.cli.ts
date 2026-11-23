@@ -83,7 +83,7 @@ Flags:
   --github-env                 Append vars to $GITHUB_ENV (heredoc for secrets)
                                AND emit NON-SECRET KEY='value' to stdout for the
                                caller to \`eval\` within the same step.
-  --database <name>            Database name (default: databricks_postgres).
+  --database <name>            Database name (default: $PGDATABASE, else databricks_postgres).
 
 Requires:
   LAKEBASE_PROJECT_ID env (project id; the CLI inherits this).

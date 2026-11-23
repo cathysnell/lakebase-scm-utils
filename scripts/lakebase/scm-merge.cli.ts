@@ -11,6 +11,18 @@ import {
 import { readWorkflowState } from "./scm-workflow-state.js";
 import { runDatabricks } from "./databricks-cli.js";
 import { applyAndVerifyTierMigration } from "./schema-migrate.js";
+import { readEnvVar } from "./env-file.js";
+
+/**
+ * Database for the local promote fallback: --database, then $PGDATABASE, then
+ * PGDATABASE in the project's .env (where an app with its own database records
+ * it), else undefined (applyAndVerifyTierMigration then uses the default).
+ * Without this the fallback migrated and verified "databricks_postgres" for a
+ * project whose app DB is e.g. "recipe", and reported ok.
+ */
+export function resolvePromoteDatabase(flag: string | undefined, projectDir: string): string | undefined {
+  return flag || process.env.PGDATABASE || readEnvVar(path.join(projectDir, ".env"), "PGDATABASE") || undefined;
+}
 
 interface ParsedArgs {
   projectDir?: string;
@@ -24,6 +36,7 @@ interface ParsedArgs {
   migrateTimeoutNonfatal?: boolean;
   noVerifyMigrateAuth?: boolean;
   noLocalMigrateFallback?: boolean;
+  database?: string;
   json?: boolean;
   pretty?: boolean;
   help?: boolean;
@@ -67,6 +80,9 @@ function parseArgs(argv: string[]): ParsedArgs {
         break;
       case "--no-local-migrate-fallback":
         out.noLocalMigrateFallback = true;
+        break;
+      case "--database":
+        out.database = argv[++i];
         break;
       case "--json":
         out.json = true;
@@ -125,6 +141,9 @@ Flags:
                           applies the parent migrations LOCALLY with a fresh token
                           if the downstream migrate does not confirm, so git and
                           Lakebase schema do not diverge (FEIP-8020).
+  --database <name>       Database the local-migrate fallback migrates and
+                          verifies. Default: $PGDATABASE, then PGDATABASE in the
+                          project's .env, then "databricks_postgres".
   --json                  Machine-readable JSON output
   --pretty                Pretty-print JSON
   -h, --help              Show this help
@@ -240,7 +259,12 @@ export async function runScmMergeCli(argv: string[]): Promise<number> {
           // `migrate-unconfirmed` detail, so mergeFeature BLOCKS completion
           // (throws migrate-failed / migrate-timeout) rather than printing a
           // false "git and Lakebase schema are in sync".
-          return applyAndVerifyTierMigration({ instance: inst, branch: parent, projectDir });
+          return applyAndVerifyTierMigration({
+            instance: inst,
+            branch: parent,
+            projectDir,
+            database: resolvePromoteDatabase(args.database, projectDir),
+          });
         }
       : undefined;
   try {
