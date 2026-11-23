@@ -4,6 +4,8 @@ All notable changes to `@databricks-solutions/lakebase-scm-utils` are documented
 
 ## Unreleased
 
+- **deps: drop the unused `@databricks/appkit` dependency; `tar` ^7.5.23, `adm-zip` ^0.6.1.** No source, template, script, or test imports `@databricks/appkit`. It is only named in skill docs, as something a consumer app adds itself. It still pulled ~40 advisories (OpenTelemetry, express, grpc-js, protobufjs, ...) into every consumer's audit and ran its postinstall on each runtime-kit warm. `tar` and `adm-zip` move to their first patched releases (tar crash on PAX numeric path; adm-zip crafted-ZIP 4 GB allocation). Production `npm audit`: 47 → 0. `dist/` is byte-identical (tar and adm-zip are external in both builds).
+
 - **.NET (ASP.NET Core) is a supported language, with EF Core or Flyway migrations.** A `*.sln` / `*.slnx` / `*.csproj` marks a project as `dotnet` (checked after Java and Python, before `package.json`). The migration tool is chosen from markers: Flyway when SQL migrations live in `db/migrations/`, EF Core when a project references `Microsoft.EntityFrameworkCore.Design`.
   - New `EfCoreAdapter` (`efcore`): apply, status, list, rollback (EF `Down()`; relative `-N`, `0`, id, version, or name), stamp (writes `__EFMigrationsHistory` rows), and new-migration (`dotnet ef migrations add`, generated from the model diff). It drives `dotnet ef --json --prefix-output` and passes the branch DSN in `DATABASE_URL`, never on the command line. `LAKEBASE_EFCORE_CONNECTION_ARG=1` opts into `--connection` for projects whose design-time factory cannot read the environment.
   - `FlywayAdapter` also handles .NET: `flywayMigrationsDir()` resolves `db/migrations/` for .NET and keeps the Maven layout for Java/Kotlin.
