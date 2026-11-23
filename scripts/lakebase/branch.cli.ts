@@ -30,6 +30,7 @@ import {
   syncEnvToCurrentBranch,
 } from "./paired-branch.js";
 import { sanitizeBranchName } from "../util/sanitize-branch-name.js";
+import { redactDsnSecrets } from "../util/redact-dsn.js";
 
 type Tier = "feature" | "test" | "uat" | "perf";
 
@@ -55,6 +56,7 @@ interface ParsedArgs {
   strictParent?: boolean;
   allowDefault?: boolean;
   pretty?: boolean;
+  showSecrets?: boolean;
   help?: boolean;
   // positional after subcommand (used by create-paired-tier + sanitize-name)
   positional?: string;
@@ -137,6 +139,9 @@ function parseArgs(argv: string[]): ParsedArgs {
       case "--pretty":
         out.pretty = true;
         break;
+      case "--show-secrets":
+        out.showSecrets = true;
+        break;
       case "--help":
       case "-h":
         out.help = true;
@@ -175,6 +180,8 @@ Common flags:
   --branch <name>          Branch name (required for most subcommands)
   --host <host>            DATABRICKS_HOST override
   --pretty                 Pretty-print JSON output
+  --show-secrets           Print connection strings with their password (a live
+                           OAuth token). Masked as *** by default.
 
 create / create-paired / create-paired-tier:
   --parent <name>          Parent branch override
@@ -209,9 +216,14 @@ other branch was forked from). Pass --allow-default to override only when
 tearing down the entire project.
 `;
 
+// Masks DSN passwords (live OAuth tokens) unless --show-secrets: sync-env,
+// checkout-paired and create-paired all return the branch's DATABASE_URL.
+let showSecrets = false;
+
 function printJson(result: unknown, pretty: boolean): void {
+  const shown = showSecrets ? result : redactDsnSecrets(result);
   process.stdout.write(
-    (pretty ? JSON.stringify(result, null, 2) : JSON.stringify(result)) + "\n"
+    (pretty ? JSON.stringify(shown, null, 2) : JSON.stringify(shown)) + "\n"
   );
 }
 
@@ -238,6 +250,7 @@ async function main(): Promise<number> {
   }
 
   const pretty = args.pretty ?? false;
+  showSecrets = args.showSecrets ?? false;
 
   try {
     switch (args.subcommand) {
