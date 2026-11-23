@@ -201,7 +201,10 @@ export async function resolveCiBranch(
       "resolveCiBranch: either gitBranch or lakebaseName is required"
     );
   }
-  const database = args.database ?? DEFAULT_DATABASE;
+  // Same order as the other CLIs (constants.ts): arg, then $PGDATABASE, then the
+  // default. CI sets PGDATABASE once per workflow, so migrate, diff and the test
+  // DATABASE_URL all target the same database.
+  const database = args.database || process.env.PGDATABASE || DEFAULT_DATABASE;
   const branches = await listBranches({ instance: args.instance });
 
   const lakebaseName = args.lakebaseName
