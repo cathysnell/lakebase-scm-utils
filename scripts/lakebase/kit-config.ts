@@ -39,7 +39,11 @@ export interface KitTimeouts {
   pgStatement: number;
   /** Short local git ops (status / rev-parse / verify / branch -d). */
   gitDefault: number;
-  /** Local git checkout (slightly higher than gitDefault to absorb working-tree work). */
+  /**
+   * Local git checkout. Includes any post-checkout hook, which runs inside the
+   * checkout. The kit's documented hook (sync .env to the branch's Lakebase
+   * endpoint) makes Lakebase API calls that routinely take more than 10 s.
+   */
   gitCheckout: number;
   /** Git operations that hit the network (ls-remote). */
   gitNetwork: number;
@@ -90,7 +94,7 @@ export const KIT_TIMEOUTS: KitTimeouts = {
   pgConnect: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_CONNECT_MS", 10_000),
   pgStatement: intFromEnv("LAKEBASE_KIT_TIMEOUT_PG_STATEMENT_MS", 15_000),
   gitDefault: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_DEFAULT_MS", 5_000),
-  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 10_000),
+  gitCheckout: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS", 120_000),
   gitNetwork: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_NETWORK_MS", 15_000),
   gitPush: intFromEnv("LAKEBASE_KIT_TIMEOUT_GIT_PUSH_MS", 30_000),
   cliLong: intFromEnv("LAKEBASE_KIT_TIMEOUT_CLI_LONG_MS", 60_000),
