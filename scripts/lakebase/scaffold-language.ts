@@ -6,8 +6,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { copyDirSubstituted } from "../util/copy-dir-substituted.js";
+import { findTemplatesDir } from "./templates-dir.js";
 import {
   deploySpringStarter,
   SpringJvmLanguage,
@@ -40,24 +40,6 @@ export interface DeployLanguageProjectArgs {
   /** Override Initializr client (tests). */
   initializrClient?: SpringInitializrClient;
   report?: ScaffoldReportFn;
-}
-
-let cachedTemplatesDir: string | undefined;
-function findTemplatesDir(): string {
-  if (cachedTemplatesDir) return cachedTemplatesDir;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let dir = here;
-  for (let i = 0; i < 6; i++) {
-    const candidate = path.join(dir, "templates", "project");
-    if (fs.existsSync(path.join(candidate, "common", ".gitignore.base"))) {
-      cachedTemplatesDir = candidate;
-      return cachedTemplatesDir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error("Could not locate templates/project tree");
 }
 
 export async function deployLanguageProject(args: DeployLanguageProjectArgs): Promise<void> {

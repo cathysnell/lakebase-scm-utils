@@ -47,8 +47,8 @@
 import * as cp from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { deployLanguageProject } from "./scaffold-language.js";
+import { findTemplatesDir } from "./templates-dir.js";
 import type { ProjectLanguage, ClientFramework, DotnetMigrationTool } from "./scaffold-language.js";
 import { copyDirSubstituted } from "../util/copy-dir-substituted.js";
 import type { SpringInitializrClient } from "./spring-initializr.js";
@@ -57,31 +57,6 @@ export type { ProjectLanguage, ClientFramework };
 export type RunnerType = "self-hosted" | "github-hosted";
 export type ScaffoldReportFn = (message: string, detail?: string) => void;
 
-/**
- * Walk up from the compiled module location looking for the canonical
- * marker file (templates/project/common/.gitignore.base). Works whether
- * the module is run from src/ (tsx) or dist/ (tsc).
- */
-let cachedTemplatesDir: string | undefined;
-function findTemplatesDir(): string {
-  if (cachedTemplatesDir) return cachedTemplatesDir;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let dir = here;
-  for (let i = 0; i < 6; i++) {
-    const candidate = path.join(dir, "templates", "project");
-    if (fs.existsSync(path.join(candidate, "common", ".gitignore.base"))) {
-      cachedTemplatesDir = candidate;
-      return cachedTemplatesDir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error(
-    `Could not locate templates/project tree relative to ${here}. ` +
-      `Pass explicit { templatesDir } to override.`
-  );
-}
 
 export interface ScaffoldOptions {
   /** Override the templates/project root. Default: auto-detected. */

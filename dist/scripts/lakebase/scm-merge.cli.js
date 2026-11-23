@@ -9978,8 +9978,8 @@ var PKG_NAME = "@databricks-solutions/lakebase-scm-utils";
 var cached;
 function substrateSelfVersion() {
   if (cached !== void 0) return cached;
-  if ("0.3.17".length > 0) {
-    cached = "0.3.17";
+  if ("0.3.18".length > 0) {
+    cached = "0.3.18";
     return cached;
   }
   cached = "unknown";
@@ -11527,13 +11527,21 @@ async function schemaMigrationStatus(args) {
 async function applyAndVerifyTierMigration(args, deps = {}) {
   const apply = deps.apply ?? applySchemaMigrations;
   const status = deps.status ?? schemaMigrationStatus;
+  const target = {
+    instance: args.instance,
+    branch: args.branch,
+    projectDir: args.projectDir,
+    language: args.language,
+    database: args.database,
+    endpointName: args.endpointName
+  };
   try {
-    await apply({ instance: args.instance, branch: args.branch, projectDir: args.projectDir, language: args.language, allowTier: true });
+    await apply({ ...target, allowTier: true });
   } catch (e) {
     return { ok: false, detail: e instanceof Error ? e.message : String(e) };
   }
   try {
-    const st = await status({ instance: args.instance, branch: args.branch, projectDir: args.projectDir, language: args.language });
+    const st = await status(target);
     if (st.pending.length > 0) {
       return {
         ok: false,

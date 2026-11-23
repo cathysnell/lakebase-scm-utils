@@ -13,8 +13,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { sanitizeArtifactId } from "../util/maven-coords.js";
+import { findTemplatesDir } from "./templates-dir.js";
 import { copyDirSubstituted } from "../util/copy-dir-substituted.js";
 import { extractZipToDir } from "../util/zip-extract.js";
 import { patchPomForLakebase } from "../util/pom-patch.js";
@@ -211,25 +211,6 @@ function parseMetadata(body: unknown): InitializrMetadata {
   };
 }
 
-// ── Templates dir resolution (mirrors scaffold.ts) ──────────────
-
-let cachedTemplatesDir: string | undefined;
-function findTemplatesDir(): string {
-  if (cachedTemplatesDir) return cachedTemplatesDir;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let dir = here;
-  for (let i = 0; i < 6; i++) {
-    const candidate = path.join(dir, "templates", "project");
-    if (fs.existsSync(path.join(candidate, "common", ".gitignore.base"))) {
-      cachedTemplatesDir = candidate;
-      return cachedTemplatesDir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error("Could not locate templates/project tree");
-}
 
 // ── Deploy orchestrator ─────────────────────────────────────────
 

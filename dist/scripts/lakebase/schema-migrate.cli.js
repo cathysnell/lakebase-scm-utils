@@ -427,8 +427,8 @@ var PKG_NAME = "@databricks-solutions/lakebase-scm-utils";
 var cached;
 function substrateSelfVersion() {
   if (cached !== void 0) return cached;
-  if ("0.3.17".length > 0) {
-    cached = "0.3.17";
+  if ("0.3.18".length > 0) {
+    cached = "0.3.18";
     return cached;
   }
   cached = "unknown";
@@ -2133,13 +2133,21 @@ async function schemaMigrationStatus(args) {
 async function applyAndVerifyTierMigration(args, deps = {}) {
   const apply = deps.apply ?? applySchemaMigrations;
   const status = deps.status ?? schemaMigrationStatus;
+  const target = {
+    instance: args.instance,
+    branch: args.branch,
+    projectDir: args.projectDir,
+    language: args.language,
+    database: args.database,
+    endpointName: args.endpointName
+  };
   try {
-    await apply({ instance: args.instance, branch: args.branch, projectDir: args.projectDir, language: args.language, allowTier: true });
+    await apply({ ...target, allowTier: true });
   } catch (e) {
     return { ok: false, detail: e instanceof Error ? e.message : String(e) };
   }
   try {
-    const st = await status({ instance: args.instance, branch: args.branch, projectDir: args.projectDir, language: args.language });
+    const st = await status(target);
     if (st.pending.length > 0) {
       return {
         ok: false,
@@ -2166,8 +2174,12 @@ function migrationSlug2(description) {
 function parseArgs(argv) {
   const out = {};
   if (argv.length === 0) return out;
-  out.subcommand = argv[0];
-  for (let i = 1; i < argv.length; i++) {
+  let i = 0;
+  if (!argv[0].startsWith("-")) {
+    out.subcommand = argv[0];
+    i = 1;
+  }
+  for (; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
       case "--instance":
@@ -2217,7 +2229,7 @@ Subcommands:
   status      Show current applied version and pending migrations
   list      Enumerate migration files on disk (no DB connection)
 
-Common flags (for apply, rollback, status):
+Common flags (for apply, apply-tier, rollback, status):
   --instance <id>            Lakebase project id (required)
   --branch <name>            Branch to migrate against (required)
   --project-dir <dir>        Project root (default: cwd)
@@ -2236,6 +2248,7 @@ Examples:
   ${binName} list
   ${binName} status --instance proj-x --branch feature/foo
   ${binName} apply --instance proj-x --branch feature/foo
+  ${binName} apply-tier --instance proj-x --branch staging --database app_db
   ${binName} rollback --instance proj-x --branch feature/foo --target -1
 
 Language support today:
@@ -2293,7 +2306,9 @@ async function main() {
           instance: args.instance,
           branch: args.branch,
           projectDir: args.projectDir,
-          language: args.language
+          language: args.language,
+          database: args.database,
+          endpointName: args.endpointName
         });
         printJson(result, args.pretty ?? false);
         if (!result.ok) {

@@ -57,6 +57,9 @@ describe("deployClientProject", () => {
       "client/src/styles/theme.css",
       "client/src/styles/global.css",
       "client/public/favicon.svg",
+      "client/public/consort-lockup.svg",
+      "client/public/consort-lockup-white.svg",
+      "client/src/components/MadeWithConsort.tsx",
       "client/tests/setup.ts",
       "client/tests/e2e/home.spec.ts",
       "client/tests/e2e/about.spec.ts",
@@ -85,6 +88,36 @@ describe("deployClientProject", () => {
     expect(about).toMatch(/className="card"/);
     // index.html wires the app-icon slot.
     expect(read(target, "client/index.html")).toMatch(/rel="icon"[^>]*favicon\.svg/);
+  });
+
+  it("ships the fixed 'Made with Consort' footer (component + App.tsx wiring + lockups + token)", () => {
+    const target = mkTarget();
+    deployClientProject(target, "demoapp", { templatesDir: TEMPLATES });
+    // App.tsx imports and renders the footer component (every Consort SPA carries it).
+    const app = read(target, "client/src/App.tsx");
+    expect(app).toMatch(/import \{ MadeWithConsort \} from "\.\/components\/MadeWithConsort"/);
+    expect(app).toMatch(/<MadeWithConsort \/>/);
+    // The component serves the wordmark from a theme-driven token + is accessible as "Consort".
+    const footer = read(target, "client/src/components/MadeWithConsort.tsx");
+    expect(footer).toMatch(/Made with/);
+    expect(footer).toMatch(/aria-label="Consort"/);
+    expect(footer).toMatch(/var\(--consort-lockup/);
+    // Center-BOTTOM justified + reactive: full width (so justify-center centers across the
+    // whole viewport) and margin-top:auto (pins to the bottom of App's flex-column shell).
+    expect(footer).toMatch(/justifyContent:\s*"center"/);
+    expect(footer).toMatch(/width:\s*"100%"/);
+    expect(footer).toMatch(/marginTop:\s*"auto"/);
+    // App.tsx is a full-height flex column so margin-top:auto reaches the viewport bottom.
+    expect(app).toMatch(/flexDirection:\s*"column"/);
+    expect(app).toMatch(/minHeight:\s*"100vh"/);
+    // Links to the Consort repo (new tab, safe rel).
+    expect(footer).toMatch(/href="https:\/\/github\.com\/databricks-solutions\/consort"/);
+    expect(footer).toMatch(/rel="noreferrer noopener"/);
+    // The baseline theme.css defines the default (dark wordmark for the light baseline surface).
+    expect(read(target, "client/src/styles/theme.css")).toMatch(/--consort-lockup:\s*url\("\/consort-lockup\.svg"\)/);
+    // Both lockup variants are servable from the public root.
+    expect(read(target, "client/public/consort-lockup.svg")).toMatch(/<svg/);
+    expect(read(target, "client/public/consort-lockup-white.svg")).toMatch(/<svg/);
   });
 
   it("writes client/.gitignore (from the npm-safe .gitignore.base) so node_modules is not committed", () => {

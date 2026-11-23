@@ -268,7 +268,16 @@ fi
 # allocates at most once per run - so local `./scripts/run-tests.sh` E2E is as
 # collision-proof as CI (pr.yml free-port-allocates the same way).
 ensure_local_e2e_ports() {
-  if [ -n "${E2E_BACKEND_PORT:-}" ]; then return 0; fi
+  # The Vite /api proxy MUST follow E2E_BACKEND_PORT in BOTH cases: when the deploy gate
+  # pre-set it (below returns early) AND when we free-port-allocate it here. Derive it in one
+  # place so the proxy never falls back to the :8000 .env default while the backend sits on
+  # the resolved port (the wrong-backend proxy bug). playwright.config.ts also honors
+  # E2E_BACKEND_PORT; this keeps run-tests.sh the single, obvious source.
+  if [ -n "${E2E_BACKEND_PORT:-}" ]; then
+    : "${VITE_PROXY_TARGET:=http://127.0.0.1:${E2E_BACKEND_PORT}}"
+    export VITE_PROXY_TARGET
+    return 0
+  fi
   if [ -f "$SCRIPT_DIR/port-utils.sh" ]; then
     # shellcheck source=/dev/null
     source "$SCRIPT_DIR/port-utils.sh"
@@ -290,6 +299,27 @@ ensure_local_e2e_ports() {
         lsof -ti tcp:"$p" 2>/dev/null | xargs kill 2>/dev/null || true
       fi
     done
+  fi
+}
+
+# Fail-loud foreign-backend guard. When the backend echoes a serve_id on /health, confirm it
+# is THIS project's (CONSORT_SERVE_ID the deploy injected) before running specs: a mismatch
+# means a DIFFERENT project holds the proxied port (two projects both defaulting to :8000), so
+# the e2e would silently test the WRONG backend and pass/fail misleadingly. Tolerant: no
+# CONSORT_SERVE_ID, no curl, a backend not yet up (standalone run boots its own via Playwright),
+# or an app that does not echo serve_id (older scaffold) => skip. The deploy gate owns a
+# pre-booted backend, so this is where the check bites.
+assert_backend_is_ours() {
+  [ -n "${CONSORT_SERVE_ID:-}" ] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  local target="${VITE_PROXY_TARGET:-http://127.0.0.1:${E2E_BACKEND_PORT:-8000}}"
+  local body seen
+  body="$(curl -fsS --max-time 5 "${target%/}/health" 2>/dev/null)" || return 0
+  seen="$(printf '%s' "$body" | sed -n 's/.*"serve_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+  [ -n "$seen" ] || return 0
+  if [ "$seen" != "${CONSORT_SERVE_ID}" ]; then
+    echo "ERROR: the backend at ${target} is a FOREIGN app (serve_id '$seen', expected '${CONSORT_SERVE_ID}') - another project holds this port. Refusing to run the client E2E against the wrong backend; relocate this project's deploy-targets.yaml local base_url to a free port or stop the other server." >&2
+    exit 1
   fi
 }
 
@@ -322,6 +352,7 @@ if [ "$#" -eq 0 ] && [ -d "$REPO_ROOT/client/tests/e2e" ] \
     # (old `!CI` and new `!!BASE_URL` alike) so the verify never reuses a stale
     # server bound to an unmigrated branch (issue #197's false-500 misdiagnosis).
     ensure_local_e2e_ports
+    assert_backend_is_ours
     e2e_rc=0
     # #2 scoped-lane: scope the E2E to THIS AC's @T specs (gated on CONSORT_SCOPE_AC; fleet runs full).
     if [ -n "$SFTDD_CLIENT_GREP" ]; then
@@ -368,4 +399,5 @@ if [ "$#" -eq 0 ] && [ -f "$REPO_ROOT/package.json" ] && { [ -f "$REPO_ROOT/play
   # Allocate free E2E ports before the enable-e2e-appended `npm run test:e2e`
   # block (below) runs, so a stale :8000 / :5173 can't hard-fail its webServer.
   ensure_local_e2e_ports
+  assert_backend_is_ours
 fi

@@ -7,6 +7,33 @@ from app.database import SessionLocal  # .env already loaded by app.database
 from app.main import app
 
 
+@pytest.fixture(scope="session", autouse=True)
+def real_branch_guard():
+    """Kit-owned, autouse: EVERY test runs against the REAL paired Lakebase branch — never localhost,
+    in-memory, or a mock. This is the single canonical branch-pin guard; roles must NOT hand-roll their
+    own (a hand-rolled copy reliably drifts to the wrong host precedence — see below).
+
+    Host precedence is DATABASE_URL-FIRST, matching app/database.py: an explicit DATABASE_URL (the
+    ephemeral-verify DSN, a CI secret, Docker) is the documented override the app honors verbatim, so the
+    EXPECTED host must be read the same way, then fall back to the LAKEBASE_HOST / DB_HOST metadata from
+    .env. Checking LAKEBASE_HOST first and ignoring DATABASE_URL is WRONG: it passes on a normal run
+    (both name the paired branch) but FALSE-FAILS under ephemeral deploy-verify, where DATABASE_URL points
+    at the ephemeral child branch while LAKEBASE_HOST still names the paired branch."""
+    import os
+
+    from sqlalchemy.engine import make_url
+
+    from app.database import engine
+
+    assert engine.dialect.name == "postgresql", engine.dialect.name
+    if os.getenv("DATABASE_URL"):
+        expected = make_url(os.environ["DATABASE_URL"]).host
+    else:
+        expected = os.getenv("LAKEBASE_HOST") or os.getenv("DB_HOST")
+    assert expected and engine.url.host == expected, (engine.url.host, expected)
+    assert engine.url.host not in ("localhost", "127.0.0.1")
+
+
 @pytest.fixture()
 def client(request):
     """FastAPI TestClient for making HTTP requests.
@@ -123,8 +150,9 @@ def _consort_emit_test_run(test_id, status, item):
         # in consort-capture.ts) so the dashboard lights each behavior test the moment it runs, scrubbing
         # lights it at its real run position, and a replay of the recording does the same.
         _consort_record_test_result(out, test_id, status, rel, ts)
+        return ts  # the test-completion moment, reused by the table snapshot so both carry ONE ts
     except (OSError, ValueError, TypeError):
-        pass
+        return None
 
 
 def _consort_test_owner(consort_dir, test_id, file_rel):
@@ -203,7 +231,7 @@ def _consort_record_test_result(out, test_id, status, file_rel, ts):
         pass
 
 
-def _consort_capture_tables(test_id, item):
+def _consort_capture_tables(test_id, item, ts=None):
     """Append a per-test TABLE snapshot to ``.consort/table-snapshots.jsonl``, keyed by test id: the
     rows of each public app table AS THIS TEST LEFT THEM, captured on the CALL phase (before teardown
     prunes). The dashboard shows the table 'as of' the running/selected test — same corpus/one-reader
@@ -235,7 +263,9 @@ def _consort_capture_tables(test_id, item):
         # stamped the feature the dashboard's attribution filter dropped them (records missing until the
         # feature-deploy snapshot). Omit on no resolution — the reader keeps the line by test id (back-compat).
         owner = _consort_test_owner(out, test_id, rel)
-        ts = datetime.now(timezone.utc).isoformat()
+        # Reuse the green event's ts (threaded from makereport) so the snapshot is visible at the EXACT
+        # playhead tick the test greens — not one event later. Fall back to now() when called standalone.
+        ts = ts or datetime.now(timezone.utc).isoformat()
         lines = []
         try:
             with engine.connect() as conn:
@@ -332,6 +362,9 @@ def pytest_runtest_makereport(item, call):
         test_id = _consort_testid(item)
         if test_id:
             status = "green" if report.passed else "red" if report.failed else "skipped"
-            _consort_emit_test_run(test_id, status, item)
-            _consort_capture_tables(test_id, item)
+            # ONE completion timestamp: the snapshot reuses the green event's ts so the table data is
+            # visible at the exact scrub tick the test greens (not one event later — the snapshot used
+            # to be written microseconds after the green event, so `snapshot.ts <= atTs` hid it a tick).
+            ts = _consort_emit_test_run(test_id, status, item)
+            _consort_capture_tables(test_id, item, ts)
     return report

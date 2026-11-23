@@ -306,7 +306,7 @@ const diff = await getSchemaDiff({
 });
 ```
 
-Subpath imports (`@databricks-solutions/consort/lakebase`, `/github`, `/git`, `/util`) are available for hosts that want narrower bundles.
+Subpath imports (`@databricks-solutions/lakebase-scm-utils/lakebase`, `/github`, `/git`, `/util`) are available for hosts that want narrower bundles.
 
 ## Composition
 

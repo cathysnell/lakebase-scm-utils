@@ -1,6 +1,7 @@
 import { NavLink, Routes, Route } from "react-router-dom";
 import { HomePage } from "./pages/HomePage";
 import { AboutPage } from "./pages/AboutPage";
+import { MadeWithConsort } from "./components/MadeWithConsort";
 
 // Route-level composition lives here. Pages compose components and use hooks
 // for data; components and hooks never wire routes themselves. EVERY feature
@@ -10,7 +11,11 @@ import { AboutPage } from "./pages/AboutPage";
 // AboutPage example: routed here + linked in the navbar + styled via global.css.
 export function App() {
   return (
-    <>
+    // App shell: a full-height flex column so the kit's "Made with Consort" footer
+    // (margin-top: auto) pins to the viewport bottom on short pages and trails the
+    // content on tall ones. Inline + token-free — this structural layout must survive
+    // both theme.css regeneration (apply-design-theme) and global.css authoring (UX).
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <nav className="navbar">
         <span className="navbar__brand">
           <img className="navbar__icon" src="/favicon.svg" alt="" />
@@ -36,6 +41,7 @@ export function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/about" element={<AboutPage />} />
       </Routes>
-    </>
+      <MadeWithConsort />
+    </div>
   );
 }

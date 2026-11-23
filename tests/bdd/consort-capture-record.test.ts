@@ -165,3 +165,37 @@ describe("python conftest _consort_capture_tables: stamps feature/story parity w
     expect(recLiteral).not.toMatch(/story_id/);
   });
 });
+
+// The table snapshot and the test's green `test.result` are ONE completion moment, but the snapshot
+// used to be written microseconds AFTER the green event (makereport emits green, then captures). The
+// story-tables route gates the table on `snapshot.ts <= atTs`, so at the EXACT scrub tick the test
+// greened the snapshot's later ts hid the rows — the table filled only one event tick later ("T4 goes
+// green but no data shows"). This locks the one-timestamp threading: makereport reuses the green
+// event's ts for the snapshot so both carry the identical ts.
+describe("python conftest: snapshot shares the green event's timestamp (visible at the green tick)", () => {
+  const conftestSrc = readFileSync(
+    join(__dirname, "..", "..", "templates", "project", "python", "tests", "conftest.py"),
+    "utf8",
+  );
+
+  it("_consort_emit_test_run returns the ts it used for the green test.result", () => {
+    const start = conftestSrc.indexOf("def _consort_emit_test_run(");
+    const body = conftestSrc.slice(start, conftestSrc.indexOf("\ndef ", start + 1));
+    expect(body).toMatch(/_consort_record_test_result\(out, test_id, status, rel, ts\)/);
+    expect(body).toMatch(/\n\s*return ts\b/); // the completion ts is returned for reuse
+  });
+
+  it("makereport threads that single ts into the snapshot capture", () => {
+    const start = conftestSrc.indexOf("def pytest_runtest_makereport(");
+    const body = conftestSrc.slice(start, conftestSrc.indexOf("\ndef ", start + 1) === -1 ? undefined : conftestSrc.indexOf("\ndef ", start + 1));
+    expect(body).toMatch(/ts\s*=\s*_consort_emit_test_run\(test_id,\s*status,\s*item\)/);
+    expect(body).toMatch(/_consort_capture_tables\(test_id,\s*item,\s*ts\)/);
+  });
+
+  it("_consort_capture_tables accepts the threaded ts and only falls back to now() when absent", () => {
+    const start = conftestSrc.indexOf("def _consort_capture_tables(");
+    const body = conftestSrc.slice(start, conftestSrc.indexOf("\ndef ", start + 1));
+    expect(body).toMatch(/def _consort_capture_tables\(test_id, item, ts=None\)/);
+    expect(body).toMatch(/ts\s*=\s*ts or datetime\.now\(timezone\.utc\)\.isoformat\(\)/);
+  });
+});

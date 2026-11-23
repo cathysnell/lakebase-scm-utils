@@ -17,34 +17,13 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { exec } from "../util/exec.js";
 import { KIT_TIMEOUTS } from "./kit-config.js";
+import { findTemplatesDir } from "./templates-dir.js";
 
 export interface InstallPlaywrightOptions {
   /** Override the templates/project root. Default: auto-detected. */
   templatesDir?: string;
-}
-
-let cachedTemplatesDir: string | undefined;
-function findTemplatesDir(): string {
-  if (cachedTemplatesDir) return cachedTemplatesDir;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let dir = here;
-  for (let i = 0; i < 6; i++) {
-    const candidate = path.join(dir, "templates", "project");
-    if (fs.existsSync(path.join(candidate, "common", ".gitignore.base"))) {
-      cachedTemplatesDir = candidate;
-      return cachedTemplatesDir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error(
-    `Could not locate templates/project tree relative to ${here}. ` +
-      `Pass explicit { templatesDir } to override.`
-  );
 }
 
 function commonDir(opts?: InstallPlaywrightOptions): string {

@@ -11,7 +11,12 @@ app = FastAPI(title="{{PROJECT_NAME}}", version="0.1.0")
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # serve_id lets the deploy poll and the client e2e confirm the backend answering
+    # this port is THIS project's, not a foreign process that grabbed the same port
+    # (two projects running at once can both default to :8000). The deploy injects
+    # CONSORT_SERVE_ID; a hand-run app falls back to the project name, so /health
+    # always carries an identity a caller can check.
+    return {"status": "ok", "serve_id": os.environ.get("CONSORT_SERVE_ID", app.title)}
 
 
 # ── Consort dashboard table-snapshot (dev/test/CI only) ─────────────────────

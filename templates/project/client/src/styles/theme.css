@@ -64,6 +64,11 @@
   /* Shadows , navy-tinted, not black, for warmth. */
   --shadow-sm: 0 2px 8px rgba(27, 49, 57, 0.06);
   --shadow-md: 0 4px 16px rgba(27, 49, 57, 0.08);
+
+  /* "Made with Consort" footer lockup (components/MadeWithConsort). Default = the dark
+   * wordmark for this light baseline surface; consort-apply-design-theme overwrites this
+   * with the white lockup when the guide's surface is dark, so the mark always contrasts. */
+  --consort-lockup: url("/consort-lockup.svg");
 }
 
 body {
