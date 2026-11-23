@@ -79,10 +79,10 @@ describe("KIT_TIMEOUTS – documented defaults (clean env)", () => {
     expect(KIT_TIMEOUTS.pgStatement).toBe(15_000);
   });
 
-  it("git operations: 5s local / 10s checkout / 15s network / 30s push", async () => {
+  it("git operations: 5s local / 120s checkout (hooks) / 15s network / 30s push", async () => {
     const { KIT_TIMEOUTS } = await loadKitConfig();
     expect(KIT_TIMEOUTS.gitDefault).toBe(5_000);
-    expect(KIT_TIMEOUTS.gitCheckout).toBe(10_000);
+    expect(KIT_TIMEOUTS.gitCheckout).toBe(120_000);
     expect(KIT_TIMEOUTS.gitNetwork).toBe(15_000);
     expect(KIT_TIMEOUTS.gitPush).toBe(30_000);
   });

@@ -46,6 +46,21 @@ function gitCurrentBranch(cwd: string): string {
   }).trim();
 }
 
+/**
+ * A git checkout that hit the kit's timeout may still have switched branches:
+ * the post-checkout hook runs inside `git checkout`, after HEAD moves. True when
+ * `err` is that timeout and HEAD is now `branch`.
+ */
+export function checkoutLandedDespiteTimeout(err: unknown, cwd: string, branch: string): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  if (code !== "ETIMEDOUT") return false;
+  try {
+    return gitCurrentBranch(cwd) === branch;
+  } catch {
+    return false;
+  }
+}
+
 function gitHasLocalBranch(cwd: string, branch: string): boolean {
   try {
     execFileSync("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], {
@@ -351,17 +366,30 @@ export async function createPairedBranch(
   // 3. Create+switch git branch
   let gitBranchCreated = false;
   if (createGitBranch) {
+    const hadLocalBranch = gitHasLocalBranch(args.cwd, sanitized);
     try {
-      if (gitHasLocalBranch(args.cwd, sanitized)) {
+      if (hadLocalBranch) {
         gitCheckoutExistingBranch(args.cwd, sanitized);
       } else {
         gitCheckoutNewBranch(args.cwd, sanitized, gitStartPoint);
         gitBranchCreated = true;
       }
     } catch (err) {
-      warnings.push(
-        `Failed to create/switch git branch "${sanitized}": ${err instanceof Error ? err.message : String(err)}`
-      );
+      if (checkoutLandedDespiteTimeout(err, args.cwd, sanitized)) {
+        // git switched branches, but a post-checkout hook (which runs inside the
+        // checkout and may call Lakebase) was still going and got killed.
+        gitBranchCreated = !hadLocalBranch;
+        warnings.push(
+          `git checkout of "${sanitized}" exceeded ${KIT_TIMEOUTS.gitCheckout} ms, most likely in a post-checkout hook, ` +
+            `which was stopped. The branch is checked out` +
+            (syncEnv ? " and .env is re-synced below." : "; run `lakebase-branch sync-env` to refresh .env.") +
+            ` Raise LAKEBASE_KIT_TIMEOUT_GIT_CHECKOUT_MS if your hooks need longer.`
+        );
+      } else {
+        warnings.push(
+          `Failed to create/switch git branch "${sanitized}": ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   }
 
