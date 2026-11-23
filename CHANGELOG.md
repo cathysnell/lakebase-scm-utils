@@ -2,16 +2,24 @@
 
 All notable changes to `@databricks-solutions/lakebase-scm-utils` are documented here.
 
-## Unreleased
+## 0.3.18 - 2026-11-23
 
 - **`lakebase-schema-migrate apply-tier` honors `--database` and `--endpoint`.** Before, `apply-tier` parsed both flags but dropped them: it migrated *and verified* `$PGDATABASE` (else `databricks_postgres`) on the `primary` endpoint, and still reported `ok: true`. If you ran `apply-tier --database <db>` with `PGDATABASE` unset, check that `<db>` on that tier is at head. `applyAndVerifyTierMigration` accepts optional `database` / `endpointName`. Not yet changed: the scaffolded `merge.yml` migrate-target step and the `scm-merge` local-migrate fallback pass no database, so they still use the default DB.
 - **`lakebase-schema-migrate --help` / `-h` prints usage and exits 0.** A leading flag is no longer read as a subcommand (before, it printed `Unknown subcommand: --help` first).
+- **`/health` echoes a `serve_id`; `run-tests.sh` refuses a foreign backend on the proxied port.** Two concurrent projects can both default to the same backend port, so the client E2E could silently proxy into the other project's server. The scaffolded app's `/health` now returns `serve_id` (from `CONSORT_SERVE_ID`, else the project name), and the E2E guard aborts when the backend answering the port is not this project's.
+- **Scaffolded clients ship a theme-aware "Made with Consort" footer** (`MadeWithConsort.tsx` + lockup SVGs, wired into `App.tsx`).
+- **`findTemplatesDir` resolves the template root, honoring `LAKEBASE_SCM_UTILS_DIR`** for local-kit development (DRY: four duplicate resolvers now share one helper).
+- **README:** the subpath-import reference now points at `@databricks-solutions/lakebase-scm-utils/{lakebase,github,git,util}` (not the stale `@databricks-solutions/consort/...`).
+
+## 0.3.17
 
 - **.NET (ASP.NET Core) is a supported language, with EF Core or Flyway migrations.** A `*.sln` / `*.slnx` / `*.csproj` marks a project as `dotnet` (checked after Java and Python, before `package.json`). The migration tool is chosen from markers: Flyway when SQL migrations live in `db/migrations/`, EF Core when a project references `Microsoft.EntityFrameworkCore.Design`.
   - New `EfCoreAdapter` (`efcore`): apply, status, list, rollback (EF `Down()`; relative `-N`, `0`, id, version, or name), stamp (writes `__EFMigrationsHistory` rows), and new-migration (`dotnet ef migrations add`, generated from the model diff). It drives `dotnet ef --json --prefix-output` and passes the branch DSN in `DATABASE_URL`, never on the command line. `LAKEBASE_EFCORE_CONNECTION_ARG=1` opts into `--connection` for projects whose design-time factory cannot read the environment.
   - `FlywayAdapter` also handles .NET: `flywayMigrationsDir()` resolves `db/migrations/` for .NET and keeps the Maven layout for Java/Kotlin.
   - Scaffold: `deployLanguageProject({ language: "dotnet", migrationTool: "efcore" | "flyway" })` lays down `templates/project/dotnet/` plus a `dotnet-efcore/` or `dotnet-flyway/` overlay: ASP.NET Core on .NET 10 with OpenAPI at `/openapi.json` and Swagger UI at `/docs` (like the Node template), a shared `NpgsqlDataSource` with a runtime-minted Lakebase credential (databricks CLI, like the Python and Node templates), and xUnit tests. `createProject` and `scaffoldAll` accept `migrationTool`.
   - Scripts and CI: `pr.yml` / `merge.yml` set up .NET from `global.json`, restore packages and tools, run `dotnet test`, install Flyway for `db/migrations/*.sql`, and list .NET migrations in the schema-diff comment. `run-tests.sh`, `flyway-migrate.sh`, `run-dev.sh`, and `prepare-schema-diff.sh` gained .NET branches.
+
+> Versions 0.2.46–0.3.16 are catalogued in the [GitHub releases](https://github.com/databricks-solutions/lakebase-scm-utils/releases); this file was not maintained across that range.
 
 ## 0.2.45
 
